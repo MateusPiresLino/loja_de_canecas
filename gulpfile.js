@@ -1,39 +1,48 @@
-const gulp = require('gulp');
-const sass = require('gulp-sass')(require('sass'));
+const { src, dest, watch, series, parallel } = require('gulp');
+const sass = require('gulp-dart-sass');
+const terser = require('gulp-terser');
+const imagemin = require('gulp-imagemin'); 
 const sourcemaps = require('gulp-sourcemaps');
-const uglify = require('gulp-uglify');
-const obfuscate = require('gulp-obfuscate');
-const imagemin = require('gulp-imagemin');
 
-function comprimeImagens() {
-    return gulp.src('./source/images/**/*')
-        .pipe(imagemin())
-        .pipe(gulp.dest('./build/images'));
+// Configurações
+const paths = {
+    styles: './source/styles/*.scss',
+    scripts: './source/scripts/*.js',
+    images: './source/images/**/*',
+    output: './build'
+};
+
+// Tarefas
+function optimizeImages() {
+    return src(paths.images)
+    .pipe(imagemin()) // Ou .pipe(squoosh())
+    .pipe(dest(`${paths.output}/images`));
 }
 
-function comprimeJavaScript() {
-    return gulp.src('./source/scripts/*.js')
-        .pipe(sourcemaps.init())
-        .pipe(uglify())
-        //.pipe(obfuscate())
-        .pipe(sourcemaps.write('./maps'))
-        .pipe(gulp.dest('./build/scripts'));
+function minifyJS() {
+    return src(paths.scripts)
+    .pipe(sourcemaps.init())
+    .pipe(terser().on('error', console.error))
+    .pipe(sourcemaps.write('./maps'))
+    .pipe(dest(`${paths.output}/scripts`));
 }
 
 function compileSass() {
-    return gulp.src('./source/styles/*.scss')
-        .pipe(sourcemaps.init())
-        .pipe(sass({
-            outputStyle: 'compressed',
-        }))
-        .pipe(sourcemaps.write('./maps'))
-        .pipe(gulp.dest('./build/styles'));
+    return src(paths.styles)
+    .pipe(sourcemaps.init())
+    .pipe(sass({ outputStyle: 'compressed' }).on('error', sass.logError))
+    .pipe(sourcemaps.write('./maps'))
+    .pipe(dest(`${paths.output}/styles`));
 }
 
-exports.sass = compileSass;
-exports.default = function () {
-    gulp.watch('./source/styles/*.scss', { ignoreInitial: false }, gulp.series(compileSass));
-    gulp.watch('./source/scripts/*.js', { ignoreInitial: false }, gulp.series(comprimeJavaScript));
-    gulp.watch('./source/images/**/*', { ignoreInitial: false }, gulp.series(comprimeImagens));
-};
+// Tarefas agrupadas
+exports.build = parallel(optimizeImages, minifyJS, compileSass);
+exports.dev = series(
+exports.build, () => {
+    watch(paths.styles, compileSass);
+    watch(paths.scripts, minifyJS);
+    watch(paths.images, optimizeImages);
+}
+);
+exports.default = exports.dev;
 
